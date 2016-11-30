@@ -3,15 +3,14 @@ package optimizer
 package pass
 
 import scala.collection.mutable
-import analysis.ClassHierarchy.Top
 import nir._, Shows._
 import util.sh
+import linker.World._
 
 /** Eliminates pure computations that are not being used. */
 class DeadCodeElimination(implicit top: Top) extends Pass {
-  override def preDefn = {
-    case defn: Defn.Define =>
-      val insts    = defn.insts
+  override def preInsts = {
+    case insts =>
       val cfg      = analysis.ControlFlow.Graph(insts)
       val usedef   = analysis.UseDef(cfg)
       val newinsts = mutable.UnrolledBuffer.empty[Inst]
@@ -30,7 +29,7 @@ class DeadCodeElimination(implicit top: Top) extends Pass {
         }
       }
 
-      Seq(defn.copy(insts = newinsts))
+      newinsts
   }
 }
 

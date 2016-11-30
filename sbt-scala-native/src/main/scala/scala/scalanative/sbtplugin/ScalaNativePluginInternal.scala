@@ -95,21 +95,40 @@ object ScalaNativePluginInternal {
     throw new MessageOnlyException("unable to link")
   }
 
+  private def timeInfo[T](logger: Logger, label: String)(f: => T): T = {
+    import java.lang.System.nanoTime
+    val start = nanoTime()
+    val res   = f
+    val end   = nanoTime()
+    logger.info(s"$label (${(end - start) / 1000000.0} ms)")
+    res
+  }
+
   /** Compiles application nir to llvm ir. */
   private def compileNir(
       config: tools.Config,
       logger: Logger,
       linkerReporter: tools.LinkerReporter,
       optimizerReporter: tools.OptimizerReporter): Seq[nir.Attr.Link] = {
-    val driver                   = tools.OptimizerDriver(config)
-    val (unresolved, links, raw) = tools.link(config, driver, linkerReporter)
+    val driver = tools.OptimizerDriver(config)
 
-    if (unresolved.nonEmpty) { reportLinkingErrors(unresolved, logger) }
+    val world = timeInfo(logger, "linking") {
+      tools.link(config, driver, linkerReporter)
+    }
 
-    val optimized = tools.optimize(config, driver, raw, optimizerReporter)
-    tools.codegen(config, optimized)
+    if (world.unresolved.nonEmpty) {
+      reportLinkingErrors(world.unresolved.toSeq, logger)
+    }
 
-    links
+    timeInfo(logger, "optimizing") {
+      tools.optimize(config, driver, world, optimizerReporter)
+    }
+
+    timeInfo(logger, "generating llvm") {
+      tools.codegen(config, world)
+    }
+
+    world.links.toSeq
   }
 
   private def running(command: Seq[String]): String =
@@ -196,18 +215,13 @@ object ScalaNativePluginInternal {
     nativeExternalDependencies := ResourceScope { implicit scope =>
       import nir.Shows._
 
-      val forceCompile = compileTask.value
+      val doCompile = compileTask.value
+      val directory = VirtualDirectory.real(classDirectory.value)
+      val paths     = Seq(linker.Path(directory))
+      val entries   = paths.flatMap(_.globals)
+      val world     = tools.link(paths, entries)
 
-      val classes = classDirectory.value
-      val progDir = VirtualDirectory.real(classes)
-      val prog    = linker.Path(progDir)
-
-      val config =
-        tools.Config.empty.withPaths(Seq(prog)).withTargetDirectory(progDir)
-
-      val (unresolved, _, _) = (linker.Linker(config)).link(prog.globals.toSeq)
-
-      unresolved.map(u => sh"$u".toString).sorted
+      world.unresolved.toSeq.map(u => sh"$u".toString).sorted
     }
 
   private def availableDependenciesTask[T](compileTask: TaskKey[T]) =
@@ -273,10 +287,16 @@ object ScalaNativePluginInternal {
       val clang     = nativeClang.value
       checkThatClangIsRecentEnough(clang)
 
-      val mainClass = (selectMainClass in Compile).value.getOrElse(
-        throw new MessageOnlyException("No main class detected.")
-      )
-      val entry     = nir.Global.Top(mainClass.toString + "$")
+      val main = {
+        if (nativeSharedLibrary.value) {
+          val mainClass = (selectMainClass in Compile).value.getOrElse(
+            throw new MessageOnlyException("No main class detected.")
+          )
+          Some(nir.Global.Top(mainClass.toString + "$"))
+        } else {
+          None
+        }
+      }
       val classpath = (fullClasspath in Compile).value.map(_.data)
       val target    = (crossTarget in Compile).value
       val appll     = target / "out.ll"
@@ -289,11 +309,10 @@ object ScalaNativePluginInternal {
       val logger            = streams.value.log
 
       val config = tools.Config.empty
-        .withEntry(entry)
+        .withMain(main)
         .withPaths(classpath.map(p =>
           tools.LinkerPath(VirtualDirectory.real(p))))
         .withTargetDirectory(VirtualDirectory.real(target))
-        .withInjectMain(!nativeSharedLibrary.value)
 
       val nirFiles   = (Keys.target.value ** "*.nir").get.toSet
       val configFile = (streams.value.cacheDirectory / "native-config")

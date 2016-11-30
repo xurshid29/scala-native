@@ -4,6 +4,7 @@ package codegen
 import java.{lang => jl}
 import java.nio.ByteBuffer
 import scala.collection.mutable
+import linker.World
 import util.{Show, sh, unreachable, unsupported}
 import util.Show.{
   Indent => i,
@@ -25,23 +26,10 @@ sealed trait CodeGen {
 object CodeGen {
 
   /** Create a new code generator for given assembly. */
-  def apply(assembly: Seq[Defn]): CodeGen = new Impl(assembly)
+  def apply(top: World.Top): CodeGen = new Impl(top)
 
-  private final class Impl(assembly: Seq[Defn]) extends CodeGen {
+  private final class Impl(top: linker.World.Top) extends CodeGen {
     private val fresh = new Fresh("gen")
-    private val globals = assembly.collect {
-      case Defn.Var(_, n, ty, _)     => n -> ty
-      case Defn.Const(_, n, ty, _)   => n -> ty
-      case Defn.Declare(_, n, sig)   => n -> sig
-      case Defn.Define(_, n, sig, _) => n -> sig
-    }.toMap
-    private val prelude = Seq(
-      sh"declare i32 @llvm.eh.typeid.for(i8*)",
-      sh"declare i32 @__gxx_personality_v0(...)",
-      sh"declare i8* @__cxa_begin_catch(i8*)",
-      sh"declare void @__cxa_end_catch()",
-      sh"@_ZTIN11scalanative16ExceptionWrapperE = external constant { i8*, i8*, i8* }"
-    )
     private val gxxpersonality =
       sh"personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*)"
     private val excrecty = sh"{ i8*, i32 }"
@@ -50,36 +38,113 @@ object CodeGen {
     private val typeid =
       sh"call i32 @llvm.eh.typeid.for(i8* bitcast ({ i8*, i8*, i8* }* @_ZTIN11scalanative16ExceptionWrapperE to i8*))"
 
-    def gen(buffer: java.nio.ByteBuffer) =
-      buffer.put(showDefns(assembly).toString.getBytes)
+    private val structs  = mutable.UnrolledBuffer.empty[Show.Result]
+    private val consts   = mutable.UnrolledBuffer.empty[Show.Result]
+    private val vars     = mutable.UnrolledBuffer.empty[Show.Result]
+    private val declares = mutable.UnrolledBuffer.empty[Show.Result]
+    private val defines  = mutable.UnrolledBuffer.empty[Show.Result]
 
-    implicit val showDefns: Show[Seq[Defn]] = Show { defns =>
-      val sorted = defns.sortBy {
-        case _: Defn.Struct  => 1
-        case _: Defn.Const   => 2
-        case _: Defn.Var     => 3
-        case _: Defn.Declare => 4
-        case _: Defn.Define  => 5
-        case _               => -1
+    private def globals(name: Global): Type =
+      if (name == top.dispatchName) {
+        top.dispatchTy
+      } else if (name == top.instanceName) {
+        top.instanceTy
+      } else {
+        top.nodes(name) match {
+          case node: World.Field  => node.ty
+          case node: World.Method => node.ty
+          case _                  => unreachable
+        }
       }
 
-      r(prelude ++: sorted.map(d => sh"$d"), sep = nl(""))
+    def gen(buffer: java.nio.ByteBuffer) = {
+      def put(shows: Seq[Show.Result]): Unit =
+        buffer.put(r(shows, sep = "\n", post = "\n").toString.getBytes)
+
+      genStructs()
+      put(structs)
+
+      genPrologueConsts()
+      genDispatchTable()
+      genInstanceTable()
+      genFields()
+      put(consts)
+      put(vars)
+
+      genPrologueMethods()
+      genMethods()
+      put(declares)
+      put(defines)
     }
 
-    implicit val showDefn: Show[Defn] = Show {
-      case Defn.Var(attrs, name, ty, rhs) =>
-        showGlobalDefn(name, attrs.isExtern, isConst = false, ty, rhs)
-      case Defn.Const(attrs, name, ty, rhs) =>
-        showGlobalDefn(name, attrs.isExtern, isConst = true, ty, rhs)
-      case Defn.Declare(attrs, name, sig) =>
-        showFunctionDefn(attrs, name, sig, Seq())
-      case Defn.Define(attrs, name, sig, blocks) =>
-        showFunctionDefn(attrs, name, sig, blocks)
-      case Defn.Struct(attrs, name, tys) =>
-        sh"%$name = type {${r(tys, sep = ", ")}}"
-      case defn =>
-        unsupported(defn)
+    def genPrologueConsts() = {
+      consts +=
+        sh"@_ZTIN11scalanative16ExceptionWrapperE = external constant { i8*, i8*, i8* }"
     }
+
+    def genPrologueMethods() = {
+      declares += sh"declare i32 @llvm.eh.typeid.for(i8*)"
+      declares += sh"declare i32 @__gxx_personality_v0(...)"
+      declares += sh"declare i8* @__cxa_begin_catch(i8*)"
+      declares += sh"declare void @__cxa_end_catch()"
+    }
+
+    def genDispatchTable(): Unit = {
+      val traitMethods = top.methods.filter(_.in.isTrait)
+      val columns = top.classes.sortBy(_.id).map { cls =>
+        val row = Array.fill[Val](traitMethods.length)(Val.Null)
+        cls.imap.foreach {
+          case (meth, value) =>
+            row(meth.id) = value
+        }
+        Val.Array(Type.Ptr, row)
+      }
+      val value =
+        Val.Array(Type.Array(Type.Ptr, traitMethods.length), columns)
+
+      consts += showGlobalDefn(top.dispatchName,
+                               isExtern = false,
+                               isConst = true,
+                               value.ty,
+                               value)
+    }
+
+    def genInstanceTable(): Unit = {
+      val columns = top.classes.sortBy(_.id).map { cls =>
+        val row = new Array[Boolean](top.traits.length)
+        cls.alltraits.foreach { trt =>
+          row(trt.id) = true
+        }
+        Val.Array(Type.Bool, row.map(Val.Bool))
+      }
+      val value = Val.Array(Type.Array(Type.Bool, top.traits.length), columns)
+
+      consts += showGlobalDefn(top.instanceName,
+                               isExtern = false,
+                               isConst = true,
+                               value.ty,
+                               value)
+    }
+
+    def genStructs() =
+      top.structs.foreach { struct =>
+        import struct._
+        structs += sh"%$name = type {${r(tys, sep = ", ")}}"
+      }
+
+    def genFields() =
+      top.fields.foreach { field =>
+        import field._
+        val buf = if (isConst) consts else vars
+        buf += showGlobalDefn(name, attrs.isExtern, isConst, ty, rhs)
+      }
+
+    def genMethods() =
+      top.methods.foreach { method =>
+        import method._
+        val buf = if (isConcrete) defines else declares
+        buf += showFunctionDefn(attrs, name, ty, insts)
+      }
 
     def showGlobalDefn(name: nir.Global,
                        isExtern: Boolean,
@@ -213,7 +278,7 @@ object CodeGen {
     implicit val showType: Show[Type] = Show {
       case Type.Void                     => "void"
       case Type.Vararg                   => "..."
-      case Type.Ptr                      => "i8*"
+      case Type.Ptr | _: Type.RefKind    => "i8*"
       case Type.Bool                     => "i1"
       case Type.I8                       => "i8"
       case Type.I16                      => "i16"
@@ -251,7 +316,28 @@ object CodeGen {
       case Val.Chars(v)      => s("c\"", v, "\\00", "\"")
       case Val.Local(n, ty)  => sh"%$n"
       case Val.Global(n, ty) => sh"bitcast (${globals(n)}* @$n to i8*)"
+      case Val.Const(v)      => const(v)
       case _                 => unsupported(v)
+    }
+
+    private val constMap = mutable.Map.empty[Val, Show.Result]
+    private var constId  = 0
+
+    def const(v: Val): Show.Result = {
+      if (constMap.contains(v)) {
+        constMap(v)
+      } else {
+        val id = constId
+        constId += 1
+        consts += showGlobalDefn(Global.Top("__const." + id),
+                                 isExtern = false,
+                                 isConst = true,
+                                 ty = v.ty,
+                                 rhs = v)
+        val res = sh"bitcast (${v.ty}* @__const.$id to i8*)"
+        constMap(v) = res
+        res
+      }
     }
 
     def llvmFloatHex(value: Float): String =

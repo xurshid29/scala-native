@@ -7,21 +7,34 @@ import nir._
 import nir.serialization._
 import nir.Shows._
 import util.Scope
+import World._
 
 sealed trait Linker {
 
   /** Link the whole world under closed world assumption. */
-  def link(entries: Seq[Global]): (Seq[Global], Seq[Attr.Link], Seq[Defn])
+  def link(entries: Seq[Global]): Top
 }
 
 object Linker {
 
+  /** Sequence of default linker injections. */
+  def injects: Seq[Inject] =
+    Seq(inject.ClassLayout,
+        inject.MainMethod,
+        inject.ModuleAccessor,
+        inject.RuntimeTypeInformation)
+
   /** Create a new linker given tools configuration. */
   def apply(config: tools.Config,
-            reporter: Reporter = Reporter.empty): Linker =
-    new Impl(config, reporter)
+            injects: Seq[Inject],
+            depends: Seq[Depend],
+            reporter: Reporter): Linker =
+    new Impl(config, injects, depends, reporter)
 
-  private final class Impl(config: tools.Config, reporter: Reporter)
+  private final class Impl(config: tools.Config,
+                           injects: Seq[Inject],
+                           depends: Seq[Depend],
+                           reporter: Reporter)
       extends Linker {
     import reporter._
 
@@ -32,13 +45,12 @@ object Linker {
           path.load(global)
       }.flatten
 
-    def link(entries: Seq[Global]): (Seq[Global], Seq[Attr.Link], Seq[Defn]) = {
-      val resolved    = mutable.Set.empty[Global]
-      val unresolved  = mutable.Set.empty[Global]
-      val links       = mutable.Set.empty[Attr.Link]
-      val defns       = mutable.UnrolledBuffer.empty[Defn]
+    def link(entries: Seq[Global]): Top = {
       val direct      = mutable.Stack.empty[Global]
       var conditional = mutable.UnrolledBuffer.empty[Dep.Conditional]
+	  val resolved    = mutable.Map.empty[Global, Defn]
+	  val unresolved  = mutable.Set.empty[Global]
+      val links       = mutable.Set.empty[Attr.Link]
 
       def processDirect =
         while (direct.nonEmpty) {
@@ -49,13 +61,12 @@ object Linker {
 
             load(workitem).fold[Unit] {
               unresolved += workitem
+
               onUnresolved(workitem)
             } {
               case (deps, newlinks, defn) =>
-                resolved += workitem
-                defns += defn
+			    resolved(workitem) = defn
                 links ++= newlinks
-                onResolved(workitem)
 
                 deps.foreach {
                   case Dep.Direct(dep) =>
@@ -66,6 +77,8 @@ object Linker {
                     conditional += cond
                     onConditionalDependency(workitem, dep, condition)
                 }
+
+                onResolved(workitem)
             }
           }
         }
@@ -88,9 +101,11 @@ object Linker {
         conditional = rest
       }
 
+      val allEntries = entries ++ depends.flatMap(_.depend)
+
       onStart()
 
-      entries.foreach { entry =>
+      allEntries.foreach { entry =>
         direct.push(entry)
         onEntry(entry)
       }
@@ -100,9 +115,14 @@ object Linker {
         processConditional
       }
 
+      val top = new Top(config.main)
+	  resolved.valuesIterator.foreach(top.enter(_))
+      injects.foreach(_.inject(top))
+      top.finish()
+
       onComplete()
 
-      (unresolved.toSeq, links.toSeq, defns.sortBy(_.name.toString).toSeq)
+      top
     }
   }
 }

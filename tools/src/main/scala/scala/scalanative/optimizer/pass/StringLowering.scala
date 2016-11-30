@@ -3,8 +3,7 @@ package optimizer
 package pass
 
 import scala.collection.mutable
-import analysis.ClassHierarchy._
-import analysis.ClassHierarchyExtractors._
+import linker.World._
 import util.ScopedVar, ScopedVar.scoped
 import nir._
 
@@ -18,7 +17,8 @@ class StringLowering(implicit top: Top) extends Pass {
   private val stringFieldNames = {
     val node  = ClassRef.unapply(StringName).get
     val names = node.allfields.sortBy(_.index).map(_.name)
-    assert(names.length == 4, "java.lang.String is expected to have 4 fields.")
+    assert(names.length == 4,
+           s"java.lang.String is expected to have 4 fields, found: ${names}")
     names
   }
 
@@ -58,12 +58,12 @@ object StringLowering extends PassCompanion {
 
   val CharArrayName = Global.Top("scala.scalanative.runtime.CharArray")
 
-  override val depends = Seq(StringName,
-                             StringValueName,
-                             StringOffsetName,
-                             StringCountName,
-                             StringCachedHashCodeName,
-                             CharArrayName)
+  override val depend = Seq(StringName,
+                            StringValueName,
+                            StringOffsetName,
+                            StringCountName,
+                            StringCachedHashCodeName,
+                            CharArrayName)
 
   override def apply(config: tools.Config, top: Top) =
     new StringLowering()(top)

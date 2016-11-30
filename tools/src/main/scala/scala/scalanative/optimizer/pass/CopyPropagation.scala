@@ -4,9 +4,9 @@ package pass
 
 import scala.collection.mutable
 import scala.annotation.tailrec
-import analysis.ClassHierarchy.Top
 import util.ScopedVar, ScopedVar.scoped
 import nir._, Inst.Let
+import linker.World._
 
 /** Propagates all copies down the use chain.
  *
@@ -36,10 +36,10 @@ class CopyPropagation extends Pass {
     copies
   }
 
-  override def preDefn = {
-    case defn: Defn.Define =>
-      locals = collect(defn.insts)
-      Seq(defn)
+  override def preInsts = {
+    case insts =>
+      locals = collect(insts)
+      insts
   }
 
   override def preInst = {

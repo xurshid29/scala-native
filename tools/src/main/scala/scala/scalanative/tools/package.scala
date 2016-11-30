@@ -2,6 +2,7 @@ package scala.scalanative
 
 import java.nio.file.Paths
 import scalanative.io.withScratchBuffer
+import scalanative.nir.Global
 
 // API use-cases
 //
@@ -21,6 +22,8 @@ import scalanative.io.withScratchBuffer
 //   1. run code gen and check the string
 
 package object tools {
+  val World = linker.World
+
   type LinkerPath = linker.Path
   val LinkerPath = linker.Path
 
@@ -36,29 +39,34 @@ package object tools {
   /** Given the classpath and entry point, link under closed-world assumption. */
   def link(config: Config,
            driver: OptimizerDriver,
-           reporter: LinkerReporter = LinkerReporter.empty)
-    : (Seq[nir.Global], Seq[nir.Attr.Link], Seq[nir.Defn]) = {
-    val deps    = driver.passes.flatMap(_.depends).distinct
-    val injects = driver.passes.flatMap(_.injects).distinct
-    val entry =
-      nir.Global.Member(config.entry, "main_class.ssnr.ObjectArray_unit")
-    val (unresolved, links, defns) =
-      (linker.Linker(config, reporter)).link(entry +: deps)
+           reporter: LinkerReporter): World.Top = {
+    val paths     = config.paths
+    val injectors = linker.Linker.injects ++ driver.passes
+    val depends   = driver.passes
+    val entries =
+      config.main.toSeq.map { main =>
+        nir.Global.Member(main, "main_class.ssnr.ObjectArray_unit")
+      }
 
-    (unresolved, links, defns ++ injects)
+    linker.Linker(config, injectors, depends, reporter).link(entries)
+  }
+
+  /** Link without main entry point. */
+  def link(paths: Seq[LinkerPath], entries: Seq[Global]): World.Top = {
+    val config = Config.empty.withPaths(paths)
+    linker.Linker(config, Seq(), Seq(), LinkerReporter.empty).link(entries)
   }
 
   /** Transform high-level closed world to its lower-level counterpart. */
-  def optimize(
-      config: Config,
-      driver: OptimizerDriver,
-      assembly: Seq[nir.Defn],
-      reporter: OptimizerReporter = OptimizerReporter.empty): Seq[nir.Defn] =
-    optimizer.Optimizer(config, driver, assembly, reporter)
+  def optimize(config: Config,
+               driver: OptimizerDriver,
+               world: World.Top,
+               reporter: OptimizerReporter = OptimizerReporter.empty): Unit =
+    optimizer.Optimizer(config, driver, world, reporter)
 
   /** Given low-level assembly, emit LLVM IR for it to the buildDirectory. */
-  def codegen(config: Config, assembly: Seq[nir.Defn]): Unit = {
-    val gen = scalanative.codegen.CodeGen(assembly)
+  def codegen(config: Config, world: World.Top): Unit = {
+    val gen = scalanative.codegen.CodeGen(world)
 
     withScratchBuffer { buffer =>
       gen.gen(buffer)

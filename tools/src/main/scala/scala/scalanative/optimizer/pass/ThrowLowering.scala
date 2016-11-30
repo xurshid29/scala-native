@@ -3,7 +3,7 @@ package optimizer
 package pass
 
 import scala.collection.mutable
-import analysis.ClassHierarchy.Top
+import linker.World._
 import analysis.ControlFlow
 import util.unreachable
 import nir._
@@ -26,8 +26,8 @@ object ThrowLowering extends PassCompanion {
   val throwSig  = Type.Function(Seq(Arg(Type.Ptr)), Type.Void)
   val throw_    = Val.Global(throwName, Type.Ptr)
 
-  override val injects =
-    Seq(Defn.Declare(Attrs.None, throwName, throwSig))
+  override def inject(top: Top) =
+    top.enter(Defn.Declare(Attrs.None, throwName, throwSig))
 
   override def apply(config: tools.Config, top: Top) =
     new ThrowLowering()(top.fresh)
