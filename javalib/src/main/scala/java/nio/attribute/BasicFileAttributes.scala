@@ -8,7 +8,7 @@ trait BasicFileAttributes {
   def isOther(): Boolean = ???
   def isRegularFile(): Boolean = ???
   def isSymbolicLink(): Boolean = ???
-  def lastAccessTime(): java.nio.file.attribute.FileTime = ???
-  def lastModifiedTime(): java.nio.file.attribute.FileTime = ???
+  def lastAccessTime(): FileTime = ???
+  def lastModifiedTime(): FileTime = ???
   def size(): Long = ???
 }

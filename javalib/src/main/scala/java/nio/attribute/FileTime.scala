@@ -9,8 +9,8 @@ object FileTime {
   // def from(instant: java.time.Instant): FileTime
 }
 
-class FileTime(private[FileTime] millis: Long) {
-  def to(unit: TimeUnit): Long = ???
-  def toMillis: Long =  millis
+class FileTime(private[FileTime] value: Long, unit: TimeUnit) {
+  def to(toUnit: TimeUnit): Long = unit.convert(value, toUnit) 
+  def toMillis: Long =  unit.toMillis(value)
   // def toInstant: java.time.Instant
 }
