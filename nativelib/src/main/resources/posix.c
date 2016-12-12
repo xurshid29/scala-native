@@ -1,8 +1,14 @@
+#define _XOPEN_SOURCE 700
+
+#include <errno.h>
+#include <ftw.h>
+#include <math.h>
+#include <signal.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <signal.h>
-#include <math.h>
-#include <errno.h>
+#include <string.h>
+
 
 // This file contains functions that wrap posix
 // built-in macros. We need this because Scala Native

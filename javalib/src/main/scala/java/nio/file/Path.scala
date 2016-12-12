@@ -1,3 +1,5 @@
 package java.nio.file
 
-abstract class Path
+trait Path {
+  def toAbsolutePath: String
+}
