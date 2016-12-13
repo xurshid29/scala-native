@@ -10,12 +10,28 @@ import attribute.{FileTime, BasicFileAttributes}
 
 import scalanative.native._
 import scalanative.posix._
-import scalanative.posix.ftw._
+import ftw._
+import Nftw._
+
+object Paths {
+  def get(x: String): Path = new Path(x)
+}
+
+class Path(path: String) {
+  override def toString = path
+}
 
 object Files {
-  def walkFileTree(root: Path, fileVisitor: FileVisitor[_ >: Path]): Path = {
-    import fileVisitor._
+  private var fv: FileVisitor[_ >: Path] = null
 
+  // java.nio.file.Files$::
+  //   walkFileTree_trait.
+  //   java.nio.file.Path_trait.
+  //   java.nio.file.FileVisitor_trait
+  //   java.nio.file.Path
+
+  def walkFileTree(root: Path, fileVisitor: FileVisitor[_ >: Path]): Path = {
+    fv = fileVisitor
 
     def convert(visitResult: FileVisitResult): Int = {
       import FileVisitResult._
@@ -28,42 +44,43 @@ object Files {
       }
     }
 
-    ntfw(
-      root.toAbsolutePath,
-      (file, sb, flag, s) => {
-        val path = new Path{ 
-          def toAbsolutePath = (fromCString(file + s.base))
-        }
+    val fun: FunctionPtr4[CString, Ptr[stat], Int, Ptr[FTW], Int] = 
+      (fileBuffer: CString, sb: Ptr[stat], flag: Int, s: Ptr[FTW]) => {
+        val path = new Path(fromCString(fileBuffer + (!s).base))
         
         def attributes = new BasicFileAttributes {
-          val fileKey = sb.st_ino  
+          val fileKey: Object = (!sb).st_ino.asInstanceOf[Object]
           
           val isDirectory = flag == FTW_F
           val isRegularFile = flag == FTW_D 
           val isSymbolicLink = flag == FTW_SL
           val isOther = !isDirectory && !isRegularFile && !isSymbolicLink
           
-          val creationTime = FileTime.from(sb.st_ctime_nsec, NANOSECONDS)
-          val lastAccessTime = FileTime.from(sb.st_atime_nsec, NANOSECONDS)
-          val lastModifiedTime = FileTime.from(sb.st_mtime_nsec, NANOSECONDS)
+          val creationTime = FileTime.from((!sb).st_ctime_nsec.toLong, NANOSECONDS)
+          val lastAccessTime = FileTime.from((!sb).st_atime_nsec.toLong, NANOSECONDS)
+          val lastModifiedTime = FileTime.from((!sb).st_mtime_nsec.toLong, NANOSECONDS)
 
-          val size = sb.size
+          val size = (!sb).st_size
         }
 
         val visitResult =
           flag match { 
-            case `FTW_F`   => visitFile(path, attributes)
-            case `FTW_D`   => preVisitDirectory(path, attributes)
-            case `FTW_SL`  => visitFile(path, attributes)
-            case `FTW_DNR` => postVisitDirectory(path, new IOException("cannot read from directory"))
-            case `FTW_NS`  => postVisitDirectory(path, new IOException("cannot stat inode"))
-            case `FTW_DP`  => postVisitDirectory(path, new IOException("visiting a symbolic link with FTW_PHYS flag set")) // should not happen
-            case `FTW_SLN` => visitFileFailed(path, new IOException("invalid symlink"))
-            case _ => postVisitDirectory(path, new IOException(s"unkown flag: $flag"))
+            case `FTW_F`   => fv.visitFile(path, attributes)
+            case `FTW_D`   => fv.preVisitDirectory(path, attributes)
+            case `FTW_SL`  => fv.visitFile(path, attributes)
+            case `FTW_DNR` => fv.postVisitDirectory(path, new IOException("cannot read from directory"))
+            case `FTW_NS`  => fv.postVisitDirectory(path, new IOException("cannot stat inode"))
+            case `FTW_DP`  => fv.postVisitDirectory(path, new IOException("visiting a symbolic link with FTW_PHYS flag set")) // should not happen
+            case `FTW_SLN` => fv.visitFileFailed(path, new IOException("invalid symlink"))
+            case _         => fv.postVisitDirectory(path, new IOException(s"unkown flag: $flag"))
           }
         convert(visitResult)
-      },
-      20,
+      }
+
+    nftw(
+      toCString(root.toString),
+      fun,
+      1024,
       FTW_ACTIONRETVAL     
     )
 

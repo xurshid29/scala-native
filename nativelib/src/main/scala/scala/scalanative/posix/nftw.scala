@@ -25,10 +25,10 @@ object ftw {
   val FTW_STOP = 3
 }
 
-@struct class FTW private (base: Int, level: Int)
+@struct class FTW private (val base: Int, val level: Int)
 
 @extern
-object Ntfw {
+object Nftw {
   def nftw(
     dirpath: CString,
     fn: FunctionPtr4[CString, Ptr[stat], Int, Ptr[FTW], Int],

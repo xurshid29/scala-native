@@ -11,7 +11,7 @@ trait FileVisitor[T] {
   def visitFileFailed(file: Path, error: IOException): FileVisitResult
 }
 
-trait SimpleFileVisitor[T] extends FileVisitor[T] {
+class SimpleFileVisitor[T] extends FileVisitor[T] {
   def postVisitDirectory(dir: Path, error: IOException): FileVisitResult =
     FileVisitResult.CONTINUE
 
@@ -26,7 +26,7 @@ trait SimpleFileVisitor[T] extends FileVisitor[T] {
 
 }
 
-trait FileVisitResult
+sealed trait FileVisitResult
 object FileVisitResult {
   case object CONTINUE extends FileVisitResult
   case object SKIP_SIBLINGS extends FileVisitResult 
