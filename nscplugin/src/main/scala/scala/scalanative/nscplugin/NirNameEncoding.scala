@@ -26,6 +26,7 @@ trait NirNameEncoding { self: NirCodeGen =>
     }
 
   def genTypeName(sym: Symbol): nir.Global = {
+    assert(sym != NoSymbol)
     val id = {
       val fullName = sym.fullName.toString
       if (fullName == "java.lang._String") "java.lang.String"

@@ -101,16 +101,42 @@ trait NirDefinitions { self: NirGlobalAddons =>
       getMember(RuntimeModule, TermName("intToULong"))
     lazy val SelectMethod = getMember(RuntimeModule, TermName("select"))
 
+    lazy val PrimitiveBoolean = getRequiredClass(
+      "scala.scalanative.runtime.PrimitiveBoolean")
+    lazy val PrimitiveChar = getRequiredClass(
+      "scala.scalanative.runtime.PrimitiveChar")
+    lazy val PrimitiveByte = getRequiredClass(
+      "scala.scalanative.runtime.PrimitiveByte")
+    lazy val PrimitiveShort = getRequiredClass(
+      "scala.scalanative.runtime.PrimitiveShort")
+    lazy val PrimitiveInt = getRequiredClass(
+      "scala.scalanative.runtime.PrimitiveInt")
+    lazy val PrimitiveLong = getRequiredClass(
+      "scala.scalanative.runtime.PrimitiveLong")
+    lazy val PrimitiveFloat = getRequiredClass(
+      "scala.scalanative.runtime.PrimitiveFloat")
+    lazy val PrimitiveDouble = getRequiredClass(
+      "scala.scalanative.runtime.PrimitiveDouble")
+    lazy val PrimitiveUnit = getRequiredClass(
+      "scala.scalanative.runtime.PrimitiveUnit")
+    lazy val PrimitivePtr = getRequiredClass(
+      "scala.scalanative.runtime.PrimitivePtr")
+
     lazy val RuntimePrimitive: Map[Char, Symbol] = Map(
-      'B' -> getRequiredClass("scala.scalanative.runtime.PrimitiveBoolean"),
-      'C' -> getRequiredClass("scala.scalanative.runtime.PrimitiveChar"),
-      'Z' -> getRequiredClass("scala.scalanative.runtime.PrimitiveByte"),
-      'S' -> getRequiredClass("scala.scalanative.runtime.PrimitiveShort"),
-      'I' -> getRequiredClass("scala.scalanative.runtime.PrimitiveInt"),
-      'L' -> getRequiredClass("scala.scalanative.runtime.PrimitiveLong"),
-      'F' -> getRequiredClass("scala.scalanative.runtime.PrimitiveFloat"),
-      'D' -> getRequiredClass("scala.scalanative.runtime.PrimitiveDouble"),
-      'U' -> getRequiredClass("scala.scalanative.runtime.PrimitiveUnit")
+      'B' -> PrimitiveBoolean,
+      'C' -> PrimitiveChar,
+      'Z' -> PrimitiveByte,
+      'z' -> PrimitiveByte,
+      'S' -> PrimitiveShort,
+      's' -> PrimitiveShort,
+      'I' -> PrimitiveInt,
+      'i' -> PrimitiveInt,
+      'L' -> PrimitiveLong,
+      'l' -> PrimitiveLong,
+      'F' -> PrimitiveFloat,
+      'D' -> PrimitiveDouble,
+      'U' -> PrimitiveUnit,
+      'P' -> PrimitivePtr
     )
 
     lazy val RuntimeArrayClass: Map[Char, Symbol] = Map(

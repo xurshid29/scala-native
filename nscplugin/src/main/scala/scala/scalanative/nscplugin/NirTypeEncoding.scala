@@ -46,6 +46,7 @@ trait NirTypeEncoding { self: NirCodeGen =>
 
     implicit def fromSymbol(sym: Symbol): SimpleType =
       SimpleType(sym, Seq.empty)
+
   }
 
   def genTypeName(sym: Symbol): nir.Global
@@ -67,7 +68,8 @@ trait NirTypeEncoding { self: NirCodeGen =>
     case UShortClass  => if (!box) nir.Type.I16  else genRefType(st)
     case UIntClass    => if (!box) nir.Type.I32  else genRefType(st)
     case ULongClass   => if (!box) nir.Type.I64  else genRefType(st)
-    case PtrClass     => nir.Type.Ptr
+    case PtrClass
+       | PrimitivePtr => if (!box) nir.Type.Ptr  else genRefType(PtrClass)
     case _            => genRefType(st)
     // format: on
   }
@@ -126,6 +128,7 @@ trait NirTypeEncoding { self: NirCodeGen =>
     case LongClass    => 'L'
     case FloatClass   => 'F'
     case DoubleClass  => 'D'
+    case PtrClass     => 'P'
     case _            => 'O'
   }
 
@@ -154,8 +157,9 @@ trait NirTypeEncoding { self: NirCodeGen =>
       nir.Type.Class(nir.Global.Top("java.lang.Float"))
     case DoubleClass =>
       nir.Type.Class(nir.Global.Top("java.lang.Double"))
+    case PtrClass =>
+      nir.Type.Class(nir.Global.Top("scala.scalanative.native.Ptr"))
     case _ =>
       unsupported("Box type must be primitive type.")
   }
-
 }

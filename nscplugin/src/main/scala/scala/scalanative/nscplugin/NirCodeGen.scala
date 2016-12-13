@@ -1279,7 +1279,10 @@ abstract class NirCodeGen
             case NullClassTag    => NullClass
             case ClassTagApply =>
               val Seq(Literal(const: Constant)) = args
-              const.typeValue.typeSymbol
+              const.typeValue match {
+                case ErasedValueType(sym, _) => sym
+                case ty                      => ty.typeSymbol
+              }
             case _ =>
               unsupported(tree)
           }
@@ -1670,7 +1673,7 @@ abstract class NirCodeGen
         case st if st.isStruct =>
           genNewStruct(st, args, focus)
 
-        case st @ SimpleType(UByteClass | UIntClass | UShortClass | ULongClass, Seq())
+        case st @ SimpleType(UByteClass | UIntClass | UShortClass | ULongClass | PtrClass, Seq())
           // We can't just compare the curClassSym with RuntimeBoxesModule
           // as it's not the same when you're actually compiling Boxes module.
           if curClassSym.fullName.toString != "scala.scalanative.runtime.Boxes" =>

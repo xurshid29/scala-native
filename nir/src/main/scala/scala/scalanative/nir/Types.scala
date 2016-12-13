@@ -62,6 +62,7 @@ object Type {
     Type.Class(Global.Top("scala.scalanative.native.ULong"))  -> Type.I64,
     Type.Class(Global.Top("java.lang.Long"))                  -> Type.I64,
     Type.Class(Global.Top("java.lang.Float"))                 -> Type.F32,
-    Type.Class(Global.Top("java.lang.Double"))                -> Type.F64
+    Type.Class(Global.Top("java.lang.Double"))                -> Type.F64,
+    Type.Class(Global.Top("scala.scalanative.native.Ptr"))    -> Type.Ptr
   )
 }

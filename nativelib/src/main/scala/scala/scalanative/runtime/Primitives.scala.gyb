@@ -5,11 +5,11 @@ import native._
 
 %{
     primitives = ['Boolean', 'Char', 'Byte', 'Short',
-                  'Int', 'Long', 'Float', 'Double', 'Unit']
+                  'Int', 'Long', 'Float', 'Double', 'Unit', 'Ptr']
 }%
 
 % for T in primitives:
 
-@struct class Primitive${T} private ()
+class Primitive${T} private ()
 
 % end

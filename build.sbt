@@ -1,6 +1,6 @@
 import scala.util.Try
-import scalanative.tools.OptimizerReporter
-import scalanative.sbtplugin.ScalaNativePluginInternal.nativeOptimizerReporter
+import scalanative.tools._
+import scalanative.sbtplugin.ScalaNativePluginInternal._
 
 val toolScalaVersion = "2.10.6"
 
@@ -335,6 +335,8 @@ lazy val sandbox =
     .settings(projectSettings)
     .settings(noPublishSettings)
     .settings(
+      nativeLinkerReporter := LinkerReporter.toFile(
+        crossTarget.value / "out.dot"),
       nativeOptimizerReporter := OptimizerReporter.toDirectory(
         crossTarget.value)
     )

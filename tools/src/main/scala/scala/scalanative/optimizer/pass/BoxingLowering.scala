@@ -86,7 +86,10 @@ object BoxingLowering extends PassCompanion {
     ("java.lang.Float", BoxesRunTime, "boxToFloat_f32_class.java.lang.Float"),
     ("java.lang.Double",
      BoxesRunTime,
-     "boxToDouble_f64_class.java.lang.Double")
+     "boxToDouble_f64_class.java.lang.Double"),
+    ("scala.scalanative.native.Ptr",
+     RuntimeBoxes,
+     "boxToPtr_ptr_class.java.lang.Object")
   ).map {
     case (name, module, id) =>
       Type.Class(Global.Top(name)) -> (module, id)
@@ -124,7 +127,10 @@ object BoxingLowering extends PassCompanion {
      "unboxToFloat_class.java.lang.Object_f32"),
     ("java.lang.Double",
      BoxesRunTime,
-     "unboxToDouble_class.java.lang.Object_f64")
+     "unboxToDouble_class.java.lang.Object_f64"),
+    ("scala.scalanative.native.Ptr",
+     RuntimeBoxes,
+     "unboxToPtr_class.java.lang.Object_ptr")
   ).map {
     case (name, module, id) =>
       Type.Class(Global.Top(name)) -> (module, id)
