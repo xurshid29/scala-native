@@ -16,6 +16,7 @@ void scalanative_init() {
 }
 
 void* scalanative_alloc_raw(size_t size) {
+    size = size + (16 - size % 16);
     if (start != 0 && last + size < start + CHUNK) {
         void* alloc = last;
         last += size;
