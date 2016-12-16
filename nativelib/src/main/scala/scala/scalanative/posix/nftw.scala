@@ -1,10 +1,13 @@
-package scala.scalanative.posix
+package scala.scalanative
+package posixx
 
 import scala.scalanative.native.{extern, struct, CString, FunctionPtr4, Ptr}
 
 // http://man7.org/linux/man-pages/man3/nftw.3.html
 
-object ftw {
+@struct class FTW private (val base: Int, val level: Int)
+
+object FTW {
   val FTW_PHYS = 1
   val FTW_MOUNT = 2
   val FTW_CHDIR = 4
@@ -13,7 +16,7 @@ object ftw {
 
   val FTW_F = 0
   val FTW_D = 1
-  val FTW_DNR = 2 
+  val FTW_DNR = 2
   val FTW_NS = 3
   val FTW_SL = 4
   val FTW_DP = 5
@@ -25,10 +28,8 @@ object ftw {
   val FTW_STOP = 3
 }
 
-@struct class FTW private (val base: Int, val level: Int)
-
 @extern
-object Nftw {
+object NFTW {
   def nftw(
     dirpath: CString,
     fn: FunctionPtr4[CString, Ptr[stat], Int, Ptr[FTW], Int],

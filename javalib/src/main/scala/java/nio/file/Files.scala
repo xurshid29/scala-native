@@ -9,16 +9,10 @@ import charset.Charset
 import attribute.{FileTime, BasicFileAttributes}
 
 import scalanative.native._
-import scalanative.posix._
-import ftw._
-import Nftw._
+import scalanative.posixx._, FTW._, NFTW._
 
 object Paths {
-  def get(x: String): Path = new Path(x)
-}
-
-class Path(path: String) {
-  override def toString = path
+  def get(x: String, rest: Array[String]): Path = ???
 }
 
 object Files {
@@ -44,18 +38,18 @@ object Files {
       }
     }
 
-    val fun: FunctionPtr4[CString, Ptr[stat], Int, Ptr[FTW], Int] = 
+    val fun: FunctionPtr4[CString, Ptr[stat], Int, Ptr[FTW], Int] =
       (fileBuffer: CString, sb: Ptr[stat], flag: Int, s: Ptr[FTW]) => {
-        val path = new Path(fromCString(fileBuffer + (!s).base))
-        
+        val path: Path = ???
+
         def attributes = new BasicFileAttributes {
           val fileKey: Object = (!sb).st_ino.asInstanceOf[Object]
-          
+
           val isDirectory = flag == FTW_F
-          val isRegularFile = flag == FTW_D 
+          val isRegularFile = flag == FTW_D
           val isSymbolicLink = flag == FTW_SL
           val isOther = !isDirectory && !isRegularFile && !isSymbolicLink
-          
+
           val creationTime = FileTime.from((!sb).st_ctime_nsec.toLong, NANOSECONDS)
           val lastAccessTime = FileTime.from((!sb).st_atime_nsec.toLong, NANOSECONDS)
           val lastModifiedTime = FileTime.from((!sb).st_mtime_nsec.toLong, NANOSECONDS)
@@ -64,7 +58,7 @@ object Files {
         }
 
         val visitResult =
-          flag match { 
+          flag match {
             case `FTW_F`   => fv.visitFile(path, attributes)
             case `FTW_D`   => fv.preVisitDirectory(path, attributes)
             case `FTW_SL`  => fv.visitFile(path, attributes)
@@ -81,7 +75,7 @@ object Files {
       toCString(root.toString),
       fun,
       1024,
-      FTW_ACTIONRETVAL     
+      FTW_ACTIONRETVAL
     )
 
     root

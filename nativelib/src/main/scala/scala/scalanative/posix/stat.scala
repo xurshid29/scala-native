@@ -1,8 +1,7 @@
 package scala.scalanative
-package posix
+package posixx
 
 import native._
-
 
 @struct class stat private(
   val st_dev: ULong,
