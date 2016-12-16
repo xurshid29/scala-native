@@ -1,10 +1,12 @@
+#include <gc.h>
+#include "gc.h"
 #include <stdio.h>
 #include <stdlib.h>
 
 // Dummy GC that allocates memory in 1G chunks and never frees.
 
-void* start;
-void* last;
+void* start = 0;
+void* last = 0;
 
 #define CHUNK (1024*1024*1024)
 
@@ -14,7 +16,7 @@ void scalanative_init() {
 }
 
 void* scalanative_alloc_raw(size_t size) {
-    if (last + size < start + CHUNK) {
+    if (start != 0 && last + size < start + CHUNK) {
         void* alloc = last;
         last += size;
         return alloc;
